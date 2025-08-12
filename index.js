@@ -24,6 +24,8 @@ const client = new Client({
 
 client.on('ready', () => {
     console.log('Mizuku hello oni chan >.< ');
+    console.log(`Logged in as ${client.user.tag}`);
+    console.log('Bot is now running on Render! 🚀');
 });
 
 const IGNORE_PREFIX ="!";
@@ -131,4 +133,5 @@ Hãy trả lời câu hỏi này: ${message.content}`;
     }
 });
 
+// Start the bot
 client.login(process.env.TOKEN);
