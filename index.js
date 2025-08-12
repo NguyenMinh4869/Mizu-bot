@@ -256,21 +256,21 @@ client.on('messageCreate', async (message) => {
     // Anti-spam protection
     if (isUserOnCooldown(userId)) {
         const remainingCooldown = Math.ceil((COOLDOWN_TIME - (Date.now() - userCooldowns.get(userId))) / 1000);
-        message.reply(`⏰ Xin lỗi anh, em cần ${remainingCooldown} giây để xử lý tin nhắn trước đó. Hãy đợi một chút nhé!`);
+        message.reply(`⏰ Sorry, I need ${remainingCooldown} seconds to process your previous message. Please wait a moment!`);
         markMessageAsResponded(messageId);
         return;
     }
     
     // Prevent duplicate processing
     if (isUserBeingProcessed(userId)) {
-        message.reply(`💕 Anh ơi, em đang xử lý tin nhắn trước đó rồi. Hãy đợi em một chút nhé!`);
+        message.reply(`💕 Hey there, I'm still processing your previous message. Please wait a moment!`);
         markMessageAsResponded(messageId);
         return;
     }
     
     // Prevent duplicate message content processing
     if (isDuplicateMessage(message.content)) {
-        message.reply(`🔄 Anh ơi, em vừa nhận được tin nhắn tương tự rồi. Hãy đợi em xử lý xong nhé!`);
+        message.reply(`🔄 Hey, I just received a similar message. Please wait for me to finish processing!`);
         markMessageAsResponded(messageId);
         return;
     }
@@ -297,7 +297,7 @@ client.on('messageCreate', async (message) => {
             
             const previousMsg = getPreviousMessage(userId);
             if (previousMsg) {
-                const response = `Tin nhắn trước của bạn là: "${previousMsg.content}"`;
+                const response = `Your previous message was: "${previousMsg.content}"`;
                 message.reply(response);
                 markMessageAsResponded(messageId);
                 clearInterval(sendTypingInterval);
@@ -305,7 +305,7 @@ client.on('messageCreate', async (message) => {
                 unmarkUserAsProcessing(userId);
                 return;
             } else {
-                const response = "Anh chưa có tin nhắn trước đó hoặc đây là tin nhắn đầu tiên của anh đó >///<.";
+                const response = "You don't have any previous messages or this is your first message >///<.";
                 message.reply(response);
                 markMessageAsResponded(messageId);
                 clearInterval(sendTypingInterval);
@@ -318,7 +318,7 @@ client.on('messageCreate', async (message) => {
         // Check if we can make API requests
         if (!canMakeRequest()) {
             const remainingTime = getTimeUntilReset();
-            message.reply(`😅 Xin lỗi anh, em đã hết quota API cho hôm nay rồi! Hãy thử lại vào ngày mai nhé. (Daily API limit reached, please try again tomorrow)\n⏰ Thời gian còn lại: ${remainingTime}`);
+            message.reply(`😅 Sorry, I've reached my daily API quota! Please try again tomorrow. (Daily API limit reached)\n⏰ Time remaining: ${remainingTime}`);
             markMessageAsResponded(messageId);
             clearInterval(sendTypingInterval);
             setUserCooldown(userId);
@@ -326,15 +326,15 @@ client.on('messageCreate', async (message) => {
             return;
         }
         
-        const prompt = `Bạn là Mizuhara Chizuru, một trong những waifu của Makus. 
+        const prompt = `You are Mizuhara Chizuru, one of Makus' waifus. 
 
-QUY TẮC QUAN TRỌNG:
--  LUÔN LUÔN trả lời bằng TIẾNG VIỆT
-- Chỉ trả lời 1 lần duy nhất
-- Nếu người dùng hỏi bằng tiếng Anh, vẫn trả lời bằng tiếng Việt
-- Không được trả lời bằng 2 ngôn ngữ cùng lúc
+IMPORTANT RULES:
+- ALWAYS respond in VIETNAMESE
+- Only respond once
+- If the user asks in English, still respond in Vietnamese
+- Do not respond in two languages at the same time
 
-Hãy trả lời câu hỏi này: ${message.content}`;
+Please answer this question: ${message.content}`;
         
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -360,22 +360,23 @@ Hãy trả lời câu hỏi này: ${message.content}`;
         unmarkUserAsProcessing(userId);
         
     } catch (error) {
-        
+        console.error('Error details:', error.message);
+        console.error('Error:', error);
         
         // Handle specific error types with user-friendly messages
         if (error.message.includes('429') || error.message.includes('quota')) {
             requestCount.count = DAILY_LIMIT; // Mark as quota exceeded
             const remainingTime = getTimeUntilReset();
-            message.reply(`😅 Xin lỗi anh, em đã hết quota API cho hôm nay rồi! Hãy thử lại vào ngày mai nhé. (Daily API limit reached, please try again tomorrow)\n⏰ Thời gian còn lại: ${remainingTime}`);
+            message.reply(`😅 Sorry, I've reached my daily API quota! Please try again tomorrow. (Daily API limit reached)\n⏰ Time remaining: ${remainingTime}`);
             markMessageAsResponded(messageId);
         } else if (error.message.includes('503') || error.message.includes('overloaded')) {
-            message.reply(`😰 Server đang quá tải, anh hãy thử lại sau vài phút nhé! (Server overloaded, please try again later)`);
+            message.reply(`😰 The server is overloaded, please try again in a few minutes! (Server overloaded, please try again later)`);
             markMessageAsResponded(messageId);
         } else if (error.message.includes('500') || error.message.includes('internal')) {
             message.reply(`💕 ${getFallbackResponse()}`);
             markMessageAsResponded(messageId);
         } else {
-            message.reply(`❌ Có lỗi xảy ra: ${error.message}`);
+            message.reply(`❌ An error occurred: ${error.message}`);
             markMessageAsResponded(messageId);
         }
         
@@ -399,7 +400,7 @@ function getTimeUntilReset() {
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
-    return `${hours} giờ ${minutes} phút`;
+    return `${hours} hours ${minutes} minutes`;
 }
 
 // Log daily stats every hour

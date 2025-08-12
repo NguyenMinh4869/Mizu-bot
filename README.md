@@ -162,9 +162,6 @@ Mizu-bot/
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
 
 ## 👨‍💻 Author
 
@@ -176,12 +173,6 @@ This project is licensed under the [MIT License](LICENSE).
 - [Google Gemini AI](https://ai.google.dev/) - AI model
 - [Render](https://render.com) - Hosting platform
 
-## 📞 Support
-
-If you encounter issues:
-1. Check existing [Issues](https://github.com/your-username/Mizu-bot/issues)
-2. Create a new issue if none exists
-3. Describe the problem in detail
 
 ---
 
