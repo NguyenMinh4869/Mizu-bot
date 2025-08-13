@@ -1,6 +1,7 @@
 require('dotenv/config');
 const { Client, IntentsBitField } = require('discord.js');
 const { InferenceClient } = require('@huggingface/inference');
+const MemoryManager = require('./memory.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -70,6 +71,9 @@ class ProcessManager {
         const cleanupAndExit = () => {
             console.log('🔄 Shutting down gracefully...');
             this.cleanup();
+            if (this.memoryManager) {
+                this.memoryManager.shutdown();
+            }
             if (global.mizuBotInstance === this) {
                 global.mizuBotInstance = null;
             }
@@ -245,11 +249,17 @@ class MessageHistory {
 
 // AI service
 class AIService {
-    constructor(apiKey) {
+    constructor(apiKey, memoryManager = null) {
         this.client = new InferenceClient(apiKey);
+        this.memoryManager = memoryManager;
     }
 
-    async generateResponse(message) {
+    async generateResponse(message, userId = null) {
+        let contextInfo = '';
+        if (userId && this.memoryManager) {
+            contextInfo = this.memoryManager.getConversationSummary(userId);
+        }
+        
         const prompt = `You are Mizuhara Chizuru, one of Maku's waifus. 
 
 IMPORTANT RULES:
@@ -262,6 +272,15 @@ IMPORTANT RULES:
 - Be helpful but sometimes tsundere
 - Only respond once
 - Keep responses natural and conversational
+
+MEMORY INSTRUCTIONS:
+- Carefully read the USER CONTEXT below
+- Learn and remember important information about the user naturally
+- Remember names, preferences, personal details, and conversation history
+- Use this information to make responses more personal and contextual
+- Don't ask for information the user has already told you
+
+USER CONTEXT: ${contextInfo}
 
 Please answer this question: ${message}`;
         
@@ -337,8 +356,8 @@ class MizuBot {
         this.processManager = new ProcessManager(CONFIG.PID_FILE);
         this.rateLimiter = new RateLimiter(CONFIG.DAILY_LIMIT);
         this.spamProtection = new SpamProtection(CONFIG.COOLDOWN_TIME);
-        this.messageHistory = new MessageHistory();
-        this.aiService = new AIService(process.env.HF_TOKEN);
+        this.memoryManager = new MemoryManager();
+        this.aiService = new AIService(process.env.HF_TOKEN, this.memoryManager);
         
         this.setupEventHandlers();
         this.setupIntervals();
@@ -406,7 +425,9 @@ class MizuBot {
         
         // Mark user as being processed
         this.spamProtection.markUserAsProcessing(userId);
-        this.messageHistory.addMessage(userId, message.content);
+        
+        // Process message for memory extraction
+        this.memoryManager.processMessage(userId, message.content);
         
         // Start typing indicator
         const typingInterval = this.startTypingIndicator(message.channel);
@@ -441,11 +462,15 @@ class MizuBot {
             return;
         }
         
-        // Generate AI response
-        const response = await this.aiService.generateResponse(message.content);
+        // Generate AI response with user context
+        const response = await this.aiService.generateResponse(message.content, userId);
         
         // Send response and update tracking
         message.reply(response);
+        
+        // Store conversation in memory
+        this.memoryManager.addConversation(userId, message.content, response);
+        
         this.spamProtection.markMessageAsResponded(messageId);
         this.spamProtection.markMessageAsSent(message.content);
         this.rateLimiter.incrementCount();
@@ -459,9 +484,9 @@ class MizuBot {
     }
 
     async handlePreviousMessageRequest(message, userId, messageId, typingInterval) {
-        const previousMsg = this.messageHistory.getPreviousMessage(userId);
-        const response = previousMsg 
-            ? `Your previous message was: "${previousMsg.content}"`
+        const recentConversations = this.memoryManager.getRecentConversations(userId, 1);
+        const response = recentConversations.length > 0 
+            ? `Your previous message was: "${recentConversations[0].message}"`
             : "You don't have any previous messages or this is your first message >///<.";
         
         message.reply(response);
