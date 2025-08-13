@@ -70,6 +70,9 @@ class ProcessManager {
         const cleanupAndExit = () => {
             console.log('🔄 Shutting down gracefully...');
             this.cleanup();
+            if (global.mizuBotInstance === this) {
+                global.mizuBotInstance = null;
+            }
             process.exit(0);
         };
 
@@ -315,6 +318,13 @@ class ErrorHandler {
 // Main bot class
 class MizuBot {
     constructor() {
+        // Ensure only one instance
+        if (global.mizuBotInstance) {
+            console.error('❌ Another MizuBot instance already exists!');
+            process.exit(1);
+        }
+        global.mizuBotInstance = this;
+        
         this.client = new Client({
             intents: [
                 IntentsBitField.Flags.Guilds,
@@ -368,11 +378,14 @@ class MizuBot {
         const userId = message.author.id;
         const messageId = message.id;
         
-        // Check if already responded
+        // Check if already responded (early check)
         if (this.spamProtection.hasRespondedToMessage(messageId)) {
             console.log(`[${processingId}] Already responded to message ${messageId}, ignoring duplicate`);
             return;
         }
+        
+        // Mark as responded immediately to prevent race conditions
+        this.spamProtection.markMessageAsResponded(messageId);
         
         // Anti-spam checks
         if (this.spamProtection.isUserOnCooldown(userId)) {
@@ -425,29 +438,32 @@ class MizuBot {
     }
 
     async processMessage(message, userId, messageId, typingInterval) {
+        // Double-check if already responded to prevent duplicate messages
+        if (this.spamProtection.hasRespondedToMessage(messageId)) {
+            console.log(`[DUPLICATE] Already responded to message ${messageId}, skipping`);
+            clearInterval(typingInterval);
+            return;
+        }
+        
         // Handle previous message requests
         if (this.isPreviousMessageRequest(message.content)) {
             await this.handlePreviousMessageRequest(message, userId, messageId, typingInterval);
             return;
         }
         
-        // Check API quota (disabled for Hugging Face)
-        // if (!this.rateLimiter.canMakeRequest()) {
-        //     const remainingTime = this.rateLimiter.getTimeUntilReset();
-        //     message.reply(`😅 Sorry, I've reached my daily API quota! Please try again tomorrow. (Daily API limit reached)\n⏰ Time remaining: ${remainingTime}`);
-        //     this.spamProtection.markMessageAsResponded(messageId);
-        //     clearInterval(typingInterval);
-        //     return;
-        // }
-        
         // Generate AI response
         const response = await this.aiService.generateResponse(message.content);
-        message.reply(response);
         
-        // Update tracking
-        this.spamProtection.markMessageAsResponded(messageId);
-        this.spamProtection.markMessageAsSent(message.content);
-        this.rateLimiter.incrementCount();
+        // Final check before sending to prevent duplicates
+        if (!this.spamProtection.hasRespondedToMessage(messageId)) {
+            message.reply(response);
+            
+            // Update tracking
+            this.spamProtection.markMessageAsResponded(messageId);
+            this.spamProtection.markMessageAsSent(message.content);
+            this.rateLimiter.incrementCount();
+        }
+        
         clearInterval(typingInterval);
     }
 
