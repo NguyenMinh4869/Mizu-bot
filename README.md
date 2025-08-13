@@ -5,7 +5,7 @@ An intelligent Discord bot powered by Google Gemini AI to chat with users. The b
 ## ✨ Features
 
 - 🤖 **AI Chat**: Intelligent conversations with Hugging Face AI (GPT-OSS-120B)
-- 🌏 **Multi-language**: Support for Vietnamese and English
+- 🌏 **Multi-language**: Smart language detection - responds in the same language as user
 - 💬 **Message History**: Remembers previous messages from users
 - ⌨️ **Typing Indicator**: Shows when the bot is typing
 - 🎭 **Personality**: Lovable Mizuhara Chizuru character
@@ -75,9 +75,11 @@ const CHANNELS = ['your_channel_id_here']
 
 ### AI Features
 The bot will automatically:
-- Analyze message context
-- Respond in Vietnamese (priority)
-- Maintain Mizuhara Chizuru's personality
+- **Smart Language Detection**: Responds in the same language as your message
+- **Vietnamese**: If you write in Vietnamese → Chizuru responds in Vietnamese
+- **English**: If you write in English → Chizuru responds in English
+- **Mixed Languages**: If you mix languages → Chizuru responds in the main language used
+- Maintain Mizuhara Chizuru's personality with cute emoticons
 - Remember conversation history
 
 ## 🚀 Deployment
