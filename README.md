@@ -4,7 +4,7 @@ An intelligent Discord bot powered by Google Gemini AI to chat with users. The b
 
 ## ✨ Features
 
-- 🤖 **AI Chat**: Intelligent conversations with Google Gemini AI
+- 🤖 **AI Chat**: Intelligent conversations with Hugging Face AI (GPT-OSS-120B)
 - 🌏 **Multi-language**: Support for Vietnamese and English
 - 💬 **Message History**: Remembers previous messages from users
 - ⌨️ **Typing Indicator**: Shows when the bot is typing
@@ -17,7 +17,7 @@ An intelligent Discord bot powered by Google Gemini AI to chat with users. The b
 - Node.js v16.0.0 or higher
 - npm or yarn
 - Discord Bot Token
-- Google Gemini API Key
+- Hugging Face API Token
 
 ### Step 1: Clone repository
 ```bash
@@ -34,7 +34,7 @@ npm install
 Create a `.env` file in the root directory with the following content:
 ```env
 TOKEN=your_discord_bot_token_here
-GEMINI_API_KEY=your_gemini_api_key_here
+HF_TOKEN=your_huggingface_token_here
 ```
 
 ### Step 4: Run the bot
@@ -55,10 +55,10 @@ node index.js
    - Read Message History
    - Use Slash Commands
 
-### Google Gemini API
-1. Visit [Google AI Studio](https://aistudio.google.com/)
-2. Create a new API key
-3. Copy the key to your `.env` file
+### Hugging Face API
+1. Visit [Hugging Face](https://huggingface.co/settings/tokens)
+2. Create a new API token
+3. Copy the token to your `.env` file
 
 ### Channel Configuration
 In `index.js`, update the `CHANNELS` array with the IDs of channels where you want the bot to operate:
@@ -137,7 +137,7 @@ Mizu-bot/
 
 ### Common Issues
 
-**"GEMINI_API_KEY not found"**
+**"HF_TOKEN not found"**
 - Check if `.env` file exists
 - Verify variable names are correct
 - If deployed, check environment variables in hosting platform
@@ -146,8 +146,8 @@ Mizu-bot/
 - Run `npm install` to install dependencies
 
 **"429 Too Many Requests"**
-- You've exceeded Gemini API quota (50 requests/day)
-- Wait until tomorrow or upgrade to paid plan
+- You've exceeded Hugging Face API quota
+- Check your Hugging Face account limits
 
 **Bot not responding**
 - Check if bot is online in Discord
@@ -170,7 +170,7 @@ Mizu-bot/
 ## 🙏 Acknowledgments
 
 - [Discord.js](https://discord.js.org/) - Discord API wrapper
-- [Google Gemini AI](https://ai.google.dev/) - AI model
+- [Hugging Face AI](https://huggingface.co/) - AI model (GPT-OSS-120B via Fireworks AI)
 - [Render](https://render.com) - Hosting platform
 
 
