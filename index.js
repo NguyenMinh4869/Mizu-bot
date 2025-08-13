@@ -384,9 +384,6 @@ class MizuBot {
             return;
         }
         
-        // Mark as responded immediately to prevent race conditions
-        this.spamProtection.markMessageAsResponded(messageId);
-        
         // Anti-spam checks
         if (this.spamProtection.isUserOnCooldown(userId)) {
             const remainingCooldown = this.spamProtection.getRemainingCooldown(userId);
@@ -438,13 +435,6 @@ class MizuBot {
     }
 
     async processMessage(message, userId, messageId, typingInterval) {
-        // Double-check if already responded to prevent duplicate messages
-        if (this.spamProtection.hasRespondedToMessage(messageId)) {
-            console.log(`[DUPLICATE] Already responded to message ${messageId}, skipping`);
-            clearInterval(typingInterval);
-            return;
-        }
-        
         // Handle previous message requests
         if (this.isPreviousMessageRequest(message.content)) {
             await this.handlePreviousMessageRequest(message, userId, messageId, typingInterval);
@@ -454,15 +444,11 @@ class MizuBot {
         // Generate AI response
         const response = await this.aiService.generateResponse(message.content);
         
-        // Final check before sending to prevent duplicates
-        if (!this.spamProtection.hasRespondedToMessage(messageId)) {
-            message.reply(response);
-            
-            // Update tracking
-            this.spamProtection.markMessageAsResponded(messageId);
-            this.spamProtection.markMessageAsSent(message.content);
-            this.rateLimiter.incrementCount();
-        }
+        // Send response and update tracking
+        message.reply(response);
+        this.spamProtection.markMessageAsResponded(messageId);
+        this.spamProtection.markMessageAsSent(message.content);
+        this.rateLimiter.incrementCount();
         
         clearInterval(typingInterval);
     }
