@@ -6,7 +6,7 @@ const path = require('path');
 
 // Configuration constants
 const CONFIG = {
-    DAILY_LIMIT: 45,
+    DAILY_LIMIT: 999999, // Unlimited for Hugging Face
     COOLDOWN_TIME: 3000,
     TYPING_INTERVAL: 5000,
     MEMORY_CLEANUP_INTERVAL: 5 * 60 * 1000,
@@ -296,9 +296,9 @@ class ErrorHandler {
         let response;
         
         if (error.message.includes('429') || error.message.includes('quota')) {
-            response = `😅 Sorry, I've reached my daily API quota! Please try again tomorrow. (Daily API limit reached)`;
+            response = `😅 Hugging Face API rate limit reached! Please try again in a few minutes.`;
         } else if (error.message.includes('503') || error.message.includes('overloaded')) {
-            response = `😰 The server is overloaded, please try again in a few minutes! (Server overloaded, please try again later)`;
+            response = `😰 The server is overloaded, please try again in a few minutes!`;
         } else if (error.message.includes('500') || error.message.includes('internal')) {
             response = `💕 ${this.getFallbackResponse()}`;
         } else {
@@ -429,14 +429,14 @@ class MizuBot {
             return;
         }
         
-        // Check API quota
-        if (!this.rateLimiter.canMakeRequest()) {
-            const remainingTime = this.rateLimiter.getTimeUntilReset();
-            message.reply(`😅 Sorry, I've reached my daily API quota! Please try again tomorrow. (Daily API limit reached)\n⏰ Time remaining: ${remainingTime}`);
-            this.spamProtection.markMessageAsResponded(messageId);
-            clearInterval(typingInterval);
-            return;
-        }
+        // Check API quota (disabled for Hugging Face)
+        // if (!this.rateLimiter.canMakeRequest()) {
+        //     const remainingTime = this.rateLimiter.getTimeUntilReset();
+        //     message.reply(`😅 Sorry, I've reached my daily API quota! Please try again tomorrow. (Daily API limit reached)\n⏰ Time remaining: ${remainingTime}`);
+        //     this.spamProtection.markMessageAsResponded(messageId);
+        //     clearInterval(typingInterval);
+        //     return;
+        // }
         
         // Generate AI response
         const response = await this.aiService.generateResponse(message.content);
