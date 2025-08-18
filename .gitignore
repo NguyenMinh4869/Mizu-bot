@@ -71,3 +71,6 @@ dist
 # Temporary folders
 tmp/
 temp/ 
+ 
+# Bot memory file
+bot_memory.json

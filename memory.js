@@ -1,11 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const { InferenceClient } = require('@huggingface/inference');
 
 class MemoryManager {
     constructor() {
         this.memoryFile = 'bot_memory.json';
         this.memory = this.loadMemory();
         this.autoSaveInterval = setInterval(() => this.saveMemory(), 30000); // Auto-save every 30 seconds
+        this.hf = new InferenceClient(process.env.HF_TOKEN);
+        this.dirty = false;
     }
 
     loadMemory() {
@@ -22,8 +25,12 @@ class MemoryManager {
 
     saveMemory() {
         try {
+            if (!this.dirty) return;
             fs.writeFileSync(this.memoryFile, JSON.stringify(this.memory, null, 2));
-            console.log('💾 Memory saved successfully');
+            this.dirty = false;
+            if (process.env.DEBUG_MEMORY === '1') {
+                console.log('💾 Memory saved successfully');
+            }
         } catch (error) {
             console.error('Error saving memory:', error);
         }
@@ -38,7 +45,10 @@ class MemoryManager {
             value: value,
             timestamp: Date.now()
         };
-        console.log(`[MEMORY] Stored ${key} for user ${userId}: ${value}`);
+        if (process.env.DEBUG_MEMORY === '1') {
+            console.log(`[MEMORY] Stored ${key} for user ${userId}: ${value}`);
+        }
+        this.dirty = true;
     }
 
     // Get user information
@@ -88,6 +98,7 @@ class MemoryManager {
         if (this.memory[userId].aiResponses.length > 20) {
             this.memory[userId].aiResponses.shift();
         }
+        this.dirty = true;
     }
 
     // Get recent conversations
@@ -118,8 +129,17 @@ class MemoryManager {
             this.memory[userId].rawMessages.shift();
         }
         
+        // Track profile update cadence
+        if (!this.memory[userId].profileUpdate) {
+            this.memory[userId].profileUpdate = { lastUpdated: 0, messagesSinceUpdate: 0 };
+        }
+        this.memory[userId].profileUpdate.messagesSinceUpdate += 1;
+
         // Let AI figure out what's important instead of hard-coded extraction
-        console.log(`[MEMORY] Stored message for user ${userId}: ${message.substring(0, 50)}...`);
+        if (process.env.DEBUG_MEMORY === '1') {
+            console.log(`[MEMORY] Stored message for user ${userId}: ${message.substring(0, 50)}...`);
+        }
+        this.dirty = true;
     }
 
     // Get conversation summary for AI context
@@ -146,6 +166,160 @@ class MemoryManager {
         }
 
         return summary;
+    }
+
+    // --- Embeddings & Retrieval ---
+    async embedText(text) {
+        try {
+            const output = await this.hf.featureExtraction({
+                model: 'sentence-transformers/all-MiniLM-L6-v2',
+                inputs: text
+            });
+
+            // Normalize output to 1D vector
+            if (Array.isArray(output) && Array.isArray(output[0])) {
+                // If it's token-level, average pool
+                const tokenVectors = output;
+                const dim = tokenVectors[0].length;
+                const sum = new Array(dim).fill(0);
+                for (const vec of tokenVectors) {
+                    for (let i = 0; i < dim; i++) sum[i] += vec[i];
+                }
+                return sum.map(v => v / tokenVectors.length);
+            }
+            return output;
+        } catch (e) {
+            console.error('Embedding error:', e.message);
+            return null;
+        }
+    }
+
+    async addEmbedding(userId, text) {
+        if (!this.memory[userId]) {
+            this.memory[userId] = {};
+        }
+        if (!this.memory[userId].embeddings) {
+            this.memory[userId].embeddings = [];
+        }
+        const vector = await this.embedText(text);
+        if (!vector) return;
+        this.memory[userId].embeddings.push({
+            vector,
+            text,
+            timestamp: Date.now()
+        });
+        // Cap to last 200 entries
+        if (this.memory[userId].embeddings.length > 200) {
+            this.memory[userId].embeddings.shift();
+        }
+        this.dirty = true;
+    }
+
+    cosineSimilarity(a, b) {
+        if (!a || !b || a.length !== b.length) return -1;
+        let dot = 0, na = 0, nb = 0;
+        for (let i = 0; i < a.length; i++) {
+            dot += a[i] * b[i];
+            na += a[i] * a[i];
+            nb += b[i] * b[i];
+        }
+        const denom = Math.sqrt(na) * Math.sqrt(nb) || 1;
+        return dot / denom;
+    }
+
+    async searchRelevantContext(userId, query, topK = 3) {
+        const store = this.memory[userId];
+        if (!store || !store.embeddings || store.embeddings.length === 0) return [];
+        const qv = await this.embedText(query);
+        if (!qv) return [];
+        const scored = store.embeddings.map(item => ({
+            text: item.text,
+            score: this.cosineSimilarity(qv, item.vector),
+            timestamp: item.timestamp
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        return scored.slice(0, topK).map(s => s.text);
+    }
+
+    // --- User Profile Summarization ---
+    getUserProfile(userId) {
+        return this.memory[userId]?.userProfile || null;
+    }
+
+    async updateUserProfileFromLLM(userId) {
+        try {
+            if (!this.memory[userId]) this.memory[userId] = {};
+            const raw = (this.memory[userId].rawMessages || []).slice(-20);
+            const conv = this.getRecentConversations(userId, 10);
+            const prompt = `You are an assistant that extracts a persistent user profile from chat logs.\n` +
+                `Return strict JSON only. Keys: name (string|null), preferences (string[]), dislikes (string[]), facts (string[]), toneTips (string[]), summary (string).\n` +
+                `Be concise and avoid guessing. If unknown, use null or empty array.\n\n` +
+                `Recent user messages:\n` + raw.map((m, i) => `[${i+1}] ${m.content}`).join('\n') + `\n\n` +
+                `Recent conversation turns:\n` + conv.map((c, i) => `[${i+1}] U: ${c.message} | A: ${c.response}`).join('\n');
+
+            const completion = await this.hf.chatCompletion({
+                provider: 'fireworks-ai',
+                model: 'openai/gpt-oss-120b',
+                messages: [{ role: 'user', content: prompt }]
+            });
+            let content = completion.choices?.[0]?.message?.content || '';
+            // Extract JSON
+            let jsonStr = content;
+            const first = content.indexOf('{');
+            const last = content.lastIndexOf('}');
+            if (first !== -1 && last !== -1) {
+                jsonStr = content.substring(first, last + 1);
+            }
+            let profile = null;
+            try { profile = JSON.parse(jsonStr); } catch (e) {
+                console.error('Failed to parse profile JSON');
+                return;
+            }
+            this.memory[userId].userProfile = {
+                ...profile,
+                lastUpdated: Date.now()
+            };
+            if (!this.memory[userId].profileUpdate) {
+                this.memory[userId].profileUpdate = { lastUpdated: 0, messagesSinceUpdate: 0 };
+            }
+            this.memory[userId].profileUpdate.lastUpdated = Date.now();
+            this.memory[userId].profileUpdate.messagesSinceUpdate = 0;
+            console.log(`[MEMORY] Updated user profile for ${userId}`);
+            this.dirty = true;
+        } catch (e) {
+            console.error('Profile update error:', e.message);
+        }
+    }
+
+    async maybeUpdateUserProfile(userId) {
+        const info = this.memory[userId]?.profileUpdate;
+        const now = Date.now();
+        const dueByCount = (info?.messagesSinceUpdate || 0) >= 5;
+        const dueByTime = !info || (now - (info.lastUpdated || 0)) > (15 * 60 * 1000);
+        if (dueByCount || dueByTime) {
+            await this.updateUserProfileFromLLM(userId);
+        }
+    }
+
+    // --- Profile helpers & data management ---
+    getUserProfileText(userId) {
+        const p = this.getUserProfile(userId);
+        if (!p) return 'No profile stored yet.';
+        const name = p.name || 'Unknown';
+        const prefs = Array.isArray(p.preferences) && p.preferences.length > 0 ? p.preferences.join(', ') : '—';
+        const dislikes = Array.isArray(p.dislikes) && p.dislikes.length > 0 ? p.dislikes.join(', ') : '—';
+        const facts = Array.isArray(p.facts) && p.facts.length > 0 ? p.facts.join(', ') : '—';
+        const tips = Array.isArray(p.toneTips) && p.toneTips.length > 0 ? p.toneTips.join(', ') : '—';
+        const summary = p.summary || '—';
+        return `Name: ${name}\nPreferences: ${prefs}\nDislikes: ${dislikes}\nFacts: ${facts}\nTone tips: ${tips}\nSummary: ${summary}`;
+    }
+
+    deleteUserMemory(userId) {
+        if (this.memory[userId]) {
+            delete this.memory[userId];
+            this.dirty = true;
+            console.log(`[MEMORY] Deleted memory for user ${userId}`);
+        }
     }
 
     // Cleanup old data (older than 30 days)

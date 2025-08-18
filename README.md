@@ -1,181 +1,73 @@
-# 🤖 Mizu-bot - Discord AI Bot
+## Mizu-bot (Discord AI bot)
 
-An intelligent Discord bot powered by Google Gemini AI to chat with users. The bot is designed with the personality of Mizuhara Chizuru from the anime Rent-a-Girlfriend.
+An AI chat bot for Discord (persona: Mizuhara Chizuru) using Hugging Face Inference and `discord.js`.
 
-## ✨ Features
+### Features
+- Smart language detection; replies in the same language as the user
+- Conversation memory, user profile, and embedding-based context retrieval
+- Typing indicator, anti-spam/cooldown, and basic rate limiting
 
-- 🤖 **AI Chat**: Intelligent conversations with Hugging Face AI (GPT-OSS-120B)
-- 🌏 **Multi-language**: Smart language detection - responds in the same language as user
-- 💬 **Message History**: Remembers previous messages from users
-- ⌨️ **Typing Indicator**: Shows when the bot is typing
-- 🎭 **Personality**: Lovable Mizuhara Chizuru character
-- 🔒 **Secure**: API keys are safely protected
-
-## 🚀 Installation
-
-### System Requirements
-- Node.js v16.0.0 or higher
-- npm or yarn
+### Requirements
+- Node.js ≥ 16
 - Discord Bot Token
 - Hugging Face API Token
 
-### Step 1: Clone repository
+### Quick Start
 ```bash
 git clone https://github.com/your-username/Mizu-bot.git
 cd Mizu-bot
-```
-
-### Step 2: Install dependencies
-```bash
 npm install
 ```
 
-### Step 3: Create .env file
-Create a `.env` file in the root directory with the following content:
+Create a `.env` file in the project root:
 ```env
-TOKEN=your_discord_bot_token_here
-HF_TOKEN=your_huggingface_token_here
+TOKEN=your_discord_bot_token
+HF_TOKEN=your_huggingface_token
+DEBUG_MEMORY=0
+# Response style: minimal (default) | expressive
+RESPONSE_STYLE=minimal
 ```
 
-### Step 4: Run the bot
+Optional: open `index.js` and set `CONFIG.CHANNELS` to restrict where the bot listens.
+
+Run the bot:
 ```bash
 npm start
-# or
-node index.js
 ```
 
-## 🔧 Configuration
-
-### Discord Bot Setup
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Go to the "Bot" tab and copy the token
-4. Add the bot to your server with permissions:
-   - Send Messages
-   - Read Message History
-   - Use Slash Commands
-
-### Hugging Face API
-1. Visit [Hugging Face](https://huggingface.co/settings/tokens)
-2. Create a new API token
-3. Copy the token to your `.env` file
-
-### Channel Configuration
-In `index.js`, update the `CHANNELS` array with the IDs of channels where you want the bot to operate:
-```javascript
-const CHANNELS = ['your_channel_id_here']
-```
-
-## 📚 Usage
-
-### Basic Commands
-- **Chat**: Simply send normal messages
-- **View previous message**: Type "what was my previous message" or "tin nhắn trước"
-- **Ignore**: Messages starting with `!` will be ignored
-
-### AI Features
-The bot will automatically:
-- **Smart Language Detection**: Responds in the same language as your message
-- **Vietnamese**: If you write in Vietnamese → Chizuru responds in Vietnamese
-- **English**: If you write in English → Chizuru responds in English
-- **Mixed Languages**: If you mix languages → Chizuru responds in the main language used
-- Maintain Mizuhara Chizuru's personality with cute emoticons
-- Remember conversation history
-
-## 🚀 Deployment
-
-### Render (Recommended)
-1. Sign up at [Render.com](https://render.com)
-2. Create "New Web Service"
-3. Connect your GitHub repository
-4. Configure:
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Plan**: Free
-5. Add Environment Variables:
-   - `TOKEN`: Discord bot token
-   - `GEMINI_API_KEY`: Gemini API key
-6. Deploy
-
-### Railway
-1. Sign up at [Railway.app](https://railway.app)
-2. Deploy from GitHub
-3. Set environment variables
-4. Bot will run 24/7
-
-### VPS/Server
+To also run the HTTP health server (cross-platform):
 ```bash
-# Install PM2
+npm run start:web
+```
+
+### Usage
+- Chat normally with the bot in a configured channel
+- View previous message: type "previous message" (or Vietnamese: "tin nhắn trước")
+- Ignore: any message starting with `!` is ignored
+
+### Configuration
+- `.env`: `TOKEN`, `HF_TOKEN`
+- `index.js` → `CONFIG`: `CHANNELS`, `COOLDOWN_TIME`, etc.
+
+You can also configure channels via environment variable:
+```env
+CHANNELS=123456789012345678,234567890123456789
+```
+
+Optional commands (DM or channel):
+- `profile` / `view profile` — show remembered user profile
+- `forget me` / `delete my data` — erase your stored memory
+
+### Deploy (simple PM2 on a VPS)
+```bash
 npm install -g pm2
-
-# Run bot with PM2
 pm2 start index.js --name mizu-bot
-
-# Auto-start on reboot
-pm2 startup
 pm2 save
 ```
 
-## 📁 Project Structure
-
-```
-Mizu-bot/
-├── index.js              # Main bot file
-├── package.json          # Dependencies and scripts
-├── .env                  # Environment variables (local)
-├── .gitignore           # Git ignore rules
-├── README.md            # This documentation
-└── node_modules/        # Dependencies (auto-generated)
-```
-
-## 🔒 Security
-
-- **DO NOT commit** `.env` file to GitHub
-- **DO NOT share** API keys with others
-- Use `.gitignore` to protect sensitive information
-- Environment variables are set in hosting platform
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**"HF_TOKEN not found"**
-- Check if `.env` file exists
-- Verify variable names are correct
-- If deployed, check environment variables in hosting platform
-
-**"Cannot find module 'discord.js'"**
-- Run `npm install` to install dependencies
-
-**"429 Too Many Requests"**
-- You've exceeded Hugging Face API quota
-- Check your Hugging Face account limits
-
-**Bot not responding**
-- Check if bot is online in Discord
-- Verify channel ID is correct
-- Ensure bot has permission to send messages
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-
-## 👨‍💻 Author
-
-**NguyenMinh4869** - [GitHub](https://github.com/NguyenMinh4869)
-
-## 🙏 Acknowledgments
-
-- [Discord.js](https://discord.js.org/) - Discord API wrapper
-- [Hugging Face AI](https://huggingface.co/) - AI model (GPT-OSS-120B via Fireworks AI)
-- [Render](https://render.com) - Hosting platform
-
+### Troubleshooting
+- Missing `HF_TOKEN`/`TOKEN`: check your `.env`
+- Bot not responding: verify permissions, `CHANNELS`, and that the bot is online
+- Quota/429: wait and retry or increase Hugging Face limits
 
 ---
-
-⭐ **If this project is helpful, please give it a star!** ⭐ 

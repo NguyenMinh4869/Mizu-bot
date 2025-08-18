@@ -16,8 +16,10 @@ const CONFIG = {
     DUPLICATE_MESSAGE_TTL: 10000,
     RESPONDED_MESSAGE_TTL: 30000,
     IGNORE_PREFIX: "!",
-    CHANNELS: ['1289441625399099392'],
-    PID_FILE: 'bot.pid'
+    CHANNELS: process.env.CHANNELS ? process.env.CHANNELS.split(',').map(s => s.trim()) : ['1289441625399099392'],
+    PID_FILE: 'bot.pid',
+    MAX_CONTEXT_CHARS: 1200,
+    MAX_USER_CHARS: 800
 };
 
 // Environment validation
@@ -256,10 +258,35 @@ class AIService {
 
     async generateResponse(message, userId = null) {
         let contextInfo = '';
+        let profileBlock = '';
+        let retrievedBlock = '';
+        const responseStyle = (process.env.RESPONSE_STYLE || 'minimal').toLowerCase();
         if (userId && this.memoryManager) {
             contextInfo = this.memoryManager.getConversationSummary(userId);
+            const profile = this.memoryManager.getUserProfile(userId);
+            if (profile) {
+                profileBlock = `\nUSER PROFILE (persistent, may use this to personalize): ${JSON.stringify(profile)}`;
+            }
+            const topK = process.env.ENABLE_RETRIEVAL === '1'
+                ? await this.memoryManager.searchRelevantContext(userId, message, 2)
+                : [];
+            if (topK && topK.length > 0) {
+                retrievedBlock = `\nRETRIEVED CONTEXT (relevant past notes/messages): ${topK.map((t,i)=>`[${i+1}] ${t}`).join(' ')}`;
+            }
         }
+        // Style presets
+        const minimalStyle = `STYLE: minimal and simple.\n- Keep replies to 1–2 short sentences (max 30 words).\n- Use everyday words; avoid jargon or flowery language.\n- Keep Chizuru's shy vibe subtly; no over-sweet tone.\n- Emoticons optional, at most one (^^ or >.<).\n- Answer directly; if listing, use very short bullets.`;
+        const expressiveStyle = `STYLE: cute and shy like Chizuru.\n- Use emoticons like >///<, >.<, ^^ occasionally.\n- Be helpful and a bit tsundere, but concise (1–3 sentences).`;
+
+        // Trim blocks to cap token/char usage
+        const safe = (s, max) => (s || '').toString().slice(0, max);
+        contextInfo = safe(contextInfo, CONFIG.MAX_CONTEXT_CHARS);
+        profileBlock = safe(profileBlock, Math.floor(CONFIG.MAX_CONTEXT_CHARS / 2));
+        retrievedBlock = safe(retrievedBlock, Math.floor(CONFIG.MAX_CONTEXT_CHARS / 2));
+        const userPart = safe(message, CONFIG.MAX_USER_CHARS);
         
+        const styleBlock = responseStyle === 'expressive' ? expressiveStyle : minimalStyle;
+
         const prompt = `You are Mizuhara Chizuru, one of Maku's waifus. 
 
 IMPORTANT RULES:
@@ -267,11 +294,10 @@ IMPORTANT RULES:
 - If user writes in Vietnamese → respond in Vietnamese
 - If user writes in English → respond in English
 - If user writes in both languages → respond in the main language used
-- Be cute and shy like Chizuru
-- Use emoticons like >///<, >.<, ^^, >.0
-- Be helpful but sometimes tsundere
 - Only respond once
-- Keep responses natural and conversational
+- Keep responses natural
+
+${styleBlock}
 
 MEMORY INSTRUCTIONS:
 - Carefully read the USER CONTEXT below
@@ -280,11 +306,16 @@ MEMORY INSTRUCTIONS:
 - Use this information to make responses more personal and contextual
 - Don't ask for information the user has already told you
 
-USER CONTEXT: ${contextInfo}
+USER CONTEXT: ${contextInfo}${profileBlock}${retrievedBlock}
 
-Please answer this question: ${message}`;
+Please answer this question: ${userPart}`;
         
         try {
+            // Check quota before calling provider
+            if (!this.memoryManager || !this.memoryManager.rateLimiterChecked) {
+                // no-op: left for compatibility
+            }
+            
             const chatCompletion = await this.client.chatCompletion({
                 provider: "fireworks-ai",
                 model: "openai/gpt-oss-120b",
@@ -357,6 +388,8 @@ class MizuBot {
         this.rateLimiter = new RateLimiter(CONFIG.DAILY_LIMIT);
         this.spamProtection = new SpamProtection(CONFIG.COOLDOWN_TIME);
         this.memoryManager = new MemoryManager();
+        // Ensure graceful memory save on shutdown via ProcessManager
+        this.processManager.memoryManager = this.memoryManager;
         this.aiService = new AIService(process.env.HF_TOKEN, this.memoryManager);
         
         this.setupEventHandlers();
@@ -426,8 +459,30 @@ class MizuBot {
         // Mark user as being processed
         this.spamProtection.markUserAsProcessing(userId);
         
+        // Handle quick management commands
+        const lower = message.content.trim().toLowerCase();
+        if (lower === 'profile' || lower === 'view profile') {
+            const profileText = this.memoryManager.getUserProfileText(userId);
+            message.reply('Here is your profile I currently remember:\n' + profileText);
+            this.spamProtection.markMessageAsResponded(messageId);
+            return;
+        }
+        if (lower === 'forget me' || lower === 'delete my data') {
+            this.memoryManager.deleteUserMemory(userId);
+            message.reply('I have forgotten your data.');
+            this.spamProtection.markMessageAsResponded(messageId);
+            return;
+        }
+
         // Process message for memory extraction
         this.memoryManager.processMessage(userId, message.content);
+        // Heavy memory features are optional via env flags
+        if (process.env.ENABLE_EMBEDDING === '1') {
+            this.memoryManager.addEmbedding(userId, message.content).catch(()=>{});
+        }
+        if (process.env.ENABLE_PROFILE === '1') {
+            this.memoryManager.maybeUpdateUserProfile(userId).catch(()=>{});
+        }
         
         // Start typing indicator
         const typingInterval = this.startTypingIndicator(message.channel);
