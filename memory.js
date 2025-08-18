@@ -4,37 +4,13 @@ const { InferenceClient } = require('@huggingface/inference');
 
 class MemoryManager {
     constructor() {
-        this.memoryFile = 'bot_memory.json';
-        this.memory = this.loadMemory();
-        this.autoSaveInterval = setInterval(() => this.saveMemory(), 30000); // Auto-save every 30 seconds
+        this.memory = {}; // Start with empty memory, no file loading
         this.hf = new InferenceClient(process.env.HF_TOKEN);
-        this.dirty = false;
+        // No auto-save interval since we're not saving to file
     }
 
-    loadMemory() {
-        try {
-            if (fs.existsSync(this.memoryFile)) {
-                const data = fs.readFileSync(this.memoryFile, 'utf8');
-                return JSON.parse(data);
-            }
-        } catch (error) {
-            console.error('Error loading memory:', error);
-        }
-        return {};
-    }
-
-    saveMemory() {
-        try {
-            if (!this.dirty) return;
-            fs.writeFileSync(this.memoryFile, JSON.stringify(this.memory, null, 2));
-            this.dirty = false;
-            if (process.env.DEBUG_MEMORY === '1') {
-                console.log('💾 Memory saved successfully');
-            }
-        } catch (error) {
-            console.error('Error saving memory:', error);
-        }
-    }
+    // loadMemory() - removed, no file loading
+    // saveMemory() - removed, no file saving
 
     // Store user information
     setUserInfo(userId, key, value) {
@@ -48,7 +24,7 @@ class MemoryManager {
         if (process.env.DEBUG_MEMORY === '1') {
             console.log(`[MEMORY] Stored ${key} for user ${userId}: ${value}`);
         }
-        this.dirty = true;
+        // No dirty flag since we're not saving to file
     }
 
     // Get user information
@@ -98,7 +74,7 @@ class MemoryManager {
         if (this.memory[userId].aiResponses.length > 20) {
             this.memory[userId].aiResponses.shift();
         }
-        this.dirty = true;
+        // No dirty flag since we're not saving to file
     }
 
     // Get recent conversations
@@ -139,7 +115,7 @@ class MemoryManager {
         if (process.env.DEBUG_MEMORY === '1') {
             console.log(`[MEMORY] Stored message for user ${userId}: ${message.substring(0, 50)}...`);
         }
-        this.dirty = true;
+        // No dirty flag since we're not saving to file
     }
 
     // Get conversation summary for AI context
@@ -212,7 +188,7 @@ class MemoryManager {
         if (this.memory[userId].embeddings.length > 200) {
             this.memory[userId].embeddings.shift();
         }
-        this.dirty = true;
+        // No dirty flag since we're not saving to file
     }
 
     cosineSimilarity(a, b) {
@@ -285,7 +261,7 @@ class MemoryManager {
             this.memory[userId].profileUpdate.lastUpdated = Date.now();
             this.memory[userId].profileUpdate.messagesSinceUpdate = 0;
             console.log(`[MEMORY] Updated user profile for ${userId}`);
-            this.dirty = true;
+            // No dirty flag since we're not saving to file
         } catch (e) {
             console.error('Profile update error:', e.message);
         }
@@ -317,7 +293,7 @@ class MemoryManager {
     deleteUserMemory(userId) {
         if (this.memory[userId]) {
             delete this.memory[userId];
-            this.dirty = true;
+            // No dirty flag since we're not saving to file
             console.log(`[MEMORY] Deleted memory for user ${userId}`);
         }
     }
@@ -359,11 +335,11 @@ class MemoryManager {
         }
     }
 
-    // Shutdown and save memory
+    // Shutdown (no file saving)
     shutdown() {
-        clearInterval(this.autoSaveInterval);
-        this.saveMemory();
-        console.log('💾 Memory manager shutdown, memory saved');
+        // No auto-save interval to clear
+        // No file saving
+        console.log('💾 Memory manager shutdown, memory cleared from RAM');
     }
 }
 

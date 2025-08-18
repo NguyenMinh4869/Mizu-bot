@@ -73,9 +73,7 @@ class ProcessManager {
         const cleanupAndExit = () => {
             console.log('🔄 Shutting down gracefully...');
             this.cleanup();
-            if (this.memoryManager) {
-                this.memoryManager.shutdown();
-            }
+            // Memory manager no longer saves to file, just clears from RAM
             if (global.mizuBotInstance === this) {
                 global.mizuBotInstance = null;
             }
